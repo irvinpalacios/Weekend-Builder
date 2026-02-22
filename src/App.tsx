@@ -32,6 +32,7 @@ interface Task {
   startTime?: string; // for Fixed (HH:mm)
   endTime?: string; // for Fixed (HH:mm)
   completed: boolean;
+  selected: boolean;
 }
 
 interface ScheduledTask extends Task {
@@ -99,6 +100,14 @@ export default function App() {
   const addTask = () => {
     if (!taskName.trim()) return;
     
+    let calculatedEndTime = fixedEnd;
+    if (taskType === 'Fixed' && fixedStart) {
+      const mins = timeToMinutes(fixedStart) + taskDuration;
+      const h = Math.floor(mins / 60) % 24;
+      const m = mins % 60;
+      calculatedEndTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+
     const task: Task = {
       id: crypto.randomUUID(),
       name: taskName,
@@ -106,8 +115,9 @@ export default function App() {
       duration: taskType === 'Flexible' ? taskDuration : undefined,
       preference: taskType === 'Flexible' ? taskPref : undefined,
       startTime: taskType === 'Fixed' ? fixedStart : undefined,
-      endTime: taskType === 'Fixed' ? fixedEnd : undefined,
+      endTime: taskType === 'Fixed' ? calculatedEndTime : undefined,
       completed: false,
+      selected: false,
     };
 
     setTasks([...tasks, task]);
@@ -133,6 +143,10 @@ export default function App() {
     setScheduledTasks(scheduledTasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
   };
 
+  const toggleSelect = (id: string) => {
+    setTasks(tasks.map(t => t.id === id ? { ...t, selected: !t.selected } : t));
+  };
+
   const planDay = () => {
     setIsPlanning(true);
     
@@ -141,7 +155,7 @@ export default function App() {
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
       const startOfPlan = Math.max(currentMinutes + 10, 6 * 60); // Start 10 mins from now or 6 AM
 
-      const pendingTasks = tasks.filter(t => !t.completed);
+      const pendingTasks = tasks.filter(t => t.selected && !t.completed);
       
       // 1. Separate Fixed and Flexible
       const fixedEvents = pendingTasks
@@ -239,9 +253,9 @@ export default function App() {
   return (
     <div className="min-h-screen text-white font-sans selection:bg-blue-500/30 pb-32">
       {/* Header */}
-      <header className="sticky top-0 z-30 px-6 py-6 flex justify-between items-center bg-transparent">
+      <header className="sticky top-0 z-30 px-6 py-6 flex justify-between items-center bg-[#1e1b4b]/80 backdrop-blur-xl border-b border-white/10">
         <div>
-          <h1 className="text-2xl font-black tracking-tight uppercase">Weekend Architect</h1>
+          <h1 className="text-2xl font-black tracking-tight uppercase">My Day Planner</h1>
           <p className="text-[10px] font-bold text-blue-300 uppercase tracking-[0.2em] mt-1">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
           </p>
@@ -277,7 +291,10 @@ export default function App() {
             <div className="flex items-center justify-between px-2">
               <h2 className="text-xs font-black uppercase tracking-[0.2em] text-blue-300">The Blueprint</h2>
               <button 
-                onClick={() => setScheduledTasks([])}
+                onClick={() => {
+                  setScheduledTasks([]);
+                  setTasks(tasks.map(t => ({ ...t, selected: false })));
+                }}
                 className="text-[10px] font-bold uppercase tracking-widest text-white/40 hover:text-white transition-colors"
               >
                 Reset Plan
@@ -349,21 +366,34 @@ export default function App() {
               {tasks.filter(t => !scheduledTasks.find(st => st.id === t.id)).map((task) => (
                 <div 
                   key={task.id} 
-                  className="glass-card p-4 flex items-center justify-between group"
+                  onClick={() => toggleSelect(task.id)}
+                  className={`glass-card p-4 flex items-center justify-between group transition-all active:scale-[0.98] cursor-pointer ${
+                    task.selected ? 'border-blue-500 bg-blue-500/20 scale-[1.02] shadow-[0_0_20px_rgba(59,130,246,0.3)]' : ''
+                  }`}
                 >
                   <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${task.type === 'Fixed' ? 'bg-blue-500/20 text-blue-300' : 'bg-white/5 text-white/40'}`}>
-                      {task.type === 'Fixed' ? <Anchor size={18} /> : <Timer size={18} />}
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${task.selected ? 'bg-blue-500 text-white' : (task.type === 'Fixed' ? 'bg-blue-500/20 text-blue-300' : 'bg-white/5 text-white/40')}`}>
+                      {task.selected ? <CheckCircle2 size={20} className="animate-in zoom-in duration-300" /> : (task.type === 'Fixed' ? <Anchor size={18} /> : <Timer size={18} />)}
                     </div>
                     <div>
-                      <h4 className="font-bold text-sm">{task.name}</h4>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-sm">{task.name}</h4>
+                        {task.selected && (
+                          <span className="text-[8px] font-black uppercase tracking-widest bg-blue-500 text-white px-1.5 py-0.5 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]">
+                            Selected
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[10px] font-black uppercase tracking-widest text-white/30 mt-0.5">
                         {task.type === 'Fixed' ? `${task.startTime} - ${task.endTime}` : `${task.preference} • ${task.duration}m`}
                       </p>
                     </div>
                   </div>
                   <button 
-                    onClick={() => deleteTask(task.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteTask(task.id);
+                    }}
                     className="w-10 h-10 flex items-center justify-center text-white/20 hover:text-red-400 transition-colors"
                   >
                     <X size={18} />
@@ -386,7 +416,7 @@ export default function App() {
         </button>
         <button 
           onClick={planDay}
-          disabled={tasks.length === 0 || isPlanning}
+          disabled={tasks.filter(t => t.selected && !t.completed).length === 0 || isPlanning}
           className="flex-[1.5] h-[56px] bg-blue-600 rounded-2xl font-black uppercase tracking-widest text-white shadow-2xl shadow-blue-500/20 active:scale-95 transition-all disabled:opacity-30 flex items-center justify-center gap-2"
         >
           {isPlanning ? (
@@ -394,7 +424,7 @@ export default function App() {
           ) : (
             <>
               <Zap size={20} />
-              Plan Day
+              Plan {tasks.filter(t => t.selected && !t.completed).length} Tasks
             </>
           )}
         </button>
@@ -498,13 +528,22 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30 mb-3 block">End Time</label>
-                      <input 
-                        type="time" 
-                        value={fixedEnd}
-                        onChange={(e) => setFixedEnd(e.target.value)}
-                        className="glass-input w-full h-16 font-bold"
-                      />
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30 mb-3 block">Duration</label>
+                      <div className="relative">
+                        <select 
+                          value={taskDuration}
+                          onChange={(e) => setTaskDuration(Number(e.target.value))}
+                          className="glass-input w-full h-16 font-bold appearance-none"
+                        >
+                          <option value={15}>15 mins</option>
+                          <option value={30}>30 mins</option>
+                          <option value={45}>45 mins</option>
+                          <option value={60}>1 hour</option>
+                          <option value={90}>1.5 hours</option>
+                          <option value={120}>2 hours</option>
+                        </select>
+                        <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                      </div>
                     </div>
                   </div>
                 )}
