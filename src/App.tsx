@@ -71,6 +71,7 @@ export default function App() {
   const [scheduledTasks, setScheduledTasks] = useState<ScheduledTask[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPlanning, setIsPlanning] = useState(false);
+  const [activeTab, setActiveTab] = useState<'blueprint' | 'list'>('list');
 
   // Form State
   const [taskType, setTaskType] = useState<TaskType>('Flexible');
@@ -147,6 +148,22 @@ export default function App() {
     setTasks(tasks.map(t => (t.id === id && t.type === 'Flexible') ? { ...t, selected: !t.selected } : t));
   };
 
+  const quickAddTask = (name: string, duration: number) => {
+    if (window.navigator.vibrate) {
+      window.navigator.vibrate(10);
+    }
+    const task: Task = {
+      id: crypto.randomUUID(),
+      name,
+      type: 'Flexible',
+      duration,
+      preference: 'Anytime',
+      completed: false,
+      selected: false,
+    };
+    setTasks(prev => [...prev, task]);
+  };
+
   const planDay = () => {
     setIsPlanning(true);
     
@@ -173,7 +190,7 @@ export default function App() {
 
       // 3. Slotting Flexible Tasks
       let timePointer = startOfPlan;
-      const finalSchedule: ScheduledTask[] = [];
+      const tempSchedule: ScheduledTask[] = [];
       
       // Sort flexible by preference window start, then duration
       const sortedFlexible = [...flexibleTasks].sort((a, b) => {
@@ -184,10 +201,6 @@ export default function App() {
       });
 
       // Simple greedy slotting
-      const allEvents = [...schedule].sort((a, b) => timeToMinutes(a.startTime || '00:00') - timeToMinutes(b.startTime || '00:00'));
-      
-      const tempSchedule: ScheduledTask[] = [];
-      
       sortedFlexible.forEach(task => {
         let placed = false;
         
@@ -220,13 +233,6 @@ export default function App() {
         }
       });
 
-      // Merge and sort final schedule
-      const combined = [...schedule, ...tempSchedule].sort((a, b) => {
-        const aStart = a.type === 'Fixed' ? timeToMinutes(a.startTime!) : timeToMinutes(a.displayStartTime.includes('AM') || a.displayStartTime.includes('PM') ? '00:00' : '00:00'); // This is tricky due to display format
-        // Better to store minutes in ScheduledTask for sorting
-        return 0; // Placeholder for now, will fix below
-      });
-
       // Re-calculate minutes for proper sorting
       const finalWithMinutes = [...schedule, ...tempSchedule].map(t => ({
         ...t,
@@ -247,6 +253,7 @@ export default function App() {
 
       setScheduledTasks(finalWithMinutes);
       setIsPlanning(false);
+      setActiveTab('blueprint');
     }, 1000);
   };
 
@@ -265,138 +272,201 @@ export default function App() {
         </div>
       </header>
 
-      <main className="px-6 space-y-8 max-w-md mx-auto">
-        {/* Empty State */}
-        {tasks.length === 0 && !scheduledTasks.length && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="glass-card p-12 flex flex-col items-center text-center space-y-6"
+      <main className="px-6 space-y-6 max-w-md mx-auto">
+        {/* Segmented Control */}
+        <div className="flex bg-white/5 p-1 rounded-full w-full max-w-[240px] mx-auto mb-4">
+          <button 
+            onClick={() => setActiveTab('list')}
+            className={`flex-1 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'list' ? 'bg-white/20 shadow-lg text-white' : 'text-white/40'}`}
           >
-            <div className="w-20 h-20 bg-white/5 rounded-[32px] flex items-center justify-center text-white/20">
-              <Zap size={48} />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold mb-2">Your day is a blank canvas</h2>
-              <p className="text-white/50 text-sm leading-relaxed">
-                Add fixed events and flexible tasks to build your perfect weekend blueprint.
-              </p>
-            </div>
-          </motion.div>
-        )}
+            List
+          </button>
+          <button 
+            onClick={() => setActiveTab('blueprint')}
+            className={`flex-1 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'blueprint' ? 'bg-white/20 shadow-lg text-white' : 'text-white/40'}`}
+          >
+            Plan
+          </button>
+        </div>
 
-        {/* Bento Grid: Scheduled Timeline */}
-        {scheduledTasks.length > 0 && (
-          <section className="space-y-4 mt-12">
-            <div className="flex items-center justify-between px-2">
-              <h2 className="text-xs font-black uppercase tracking-[0.2em] text-blue-300">The Blueprint</h2>
-              <button 
-                onClick={() => {
-                  setScheduledTasks([]);
-                  setTasks(tasks.map(t => ({ ...t, selected: false })));
-                }}
-                className="text-[10px] font-bold uppercase tracking-widest text-white/40 hover:text-white transition-colors"
-              >
-                Reset Plan
-              </button>
-            </div>
-            
-            <div className="grid gap-4">
-              {scheduledTasks.map((task, idx) => (
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.1 }}
-                  key={task.id}
-                  onClick={() => toggleComplete(task.id)}
-                  className={`glass-card p-5 relative overflow-hidden group cursor-pointer transition-all active:scale-[0.98] ${
-                    task.completed ? 'opacity-40 grayscale' : ''
-                  } ${task.type === 'Fixed' ? 'border-blue-400/40 bg-blue-500/5' : ''}`}
+        {/* List View */}
+        {activeTab === 'list' && (
+          <div className="space-y-6">
+            {/* Quick Add Chips */}
+            <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar -mx-6 px-6">
+              {[
+                { name: 'Walk Dogs', icon: '🐾', duration: 30 },
+                { name: 'Bike Ride', icon: '🚲', duration: 60 },
+                { name: 'Gym', icon: '🏋️', duration: 60 },
+                { name: 'Read', icon: '📖', duration: 30 },
+              ].map(chip => (
+                <button
+                  key={chip.name}
+                  onClick={() => quickAddTask(chip.name, chip.duration)}
+                  className="glass-card px-4 py-3 flex items-center gap-2 whitespace-nowrap active:scale-95 transition-all"
                 >
-                  {/* Type Indicator */}
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex items-center gap-2">
-                      {task.type === 'Fixed' ? (
-                        <div className="bg-blue-500/20 text-blue-300 p-1.5 rounded-lg">
-                          <Anchor size={14} />
-                        </div>
-                      ) : (
-                        <div className="bg-white/10 text-white/60 p-1.5 rounded-lg">
-                          <Timer size={14} />
-                        </div>
-                      )}
-                      <span className="text-[10px] font-black uppercase tracking-widest text-white/40">
-                        {task.type}
-                      </span>
-                    </div>
-                    {task.completed && <CheckCircle2 size={18} className="text-emerald-400" />}
+                  <span className="text-lg">{chip.icon}</span>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase tracking-tight leading-none">{chip.name}</p>
+                    <p className="text-[8px] font-bold text-white/40 uppercase mt-1">{chip.duration}m</p>
                   </div>
-
-                  <h3 className={`text-lg font-bold leading-tight mb-2 ${task.completed ? 'line-through' : ''}`}>
-                    {task.name}
-                  </h3>
-
-                  <div className="flex items-center gap-4 text-xs font-bold text-white/60">
-                    <div className="flex items-center gap-1.5">
-                      <Clock size={14} className="text-blue-400" />
-                      <span>{task.displayStartTime} — {task.displayEndTime}</span>
-                    </div>
-                    {task.duration && (
-                      <span className="bg-white/5 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-tighter">
-                        {task.duration}m
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Highlight for Fixed */}
-                  {task.type === 'Fixed' && (
-                    <div className="absolute top-0 right-0 w-1 h-full bg-blue-400/50" />
-                  )}
-                </motion.div>
+                </button>
               ))}
             </div>
-          </section>
+
+            {/* Empty State for List */}
+            {tasks.filter(t => !t.completed && !scheduledTasks.find(st => st.id === t.id)).length === 0 && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="glass-card p-12 flex flex-col items-center text-center space-y-6"
+              >
+                <div className="w-20 h-20 bg-white/5 rounded-[32px] flex items-center justify-center text-white/20">
+                  <Plus size={48} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold mb-2">Your list is empty</h2>
+                  <p className="text-white/50 text-sm leading-relaxed">
+                    Add tasks using the chips above or the button below to start planning your day.
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
+            {/* The List */}
+            {tasks.filter(t => !t.completed && !scheduledTasks.find(st => st.id === t.id)).length > 0 && (
+              <section className="space-y-4">
+                <h2 className="text-xs font-black uppercase tracking-[0.2em] text-white/30 px-2">The List</h2>
+                <div className="grid grid-cols-1 gap-3">
+                  {tasks.filter(t => !t.completed && !scheduledTasks.find(st => st.id === t.id)).map((task) => (
+                    <div 
+                      key={task.id} 
+                      onClick={() => toggleSelect(task.id)}
+                      className={`glass-card p-4 flex items-center justify-between group transition-all active:scale-[0.98] cursor-pointer ${
+                        task.selected ? 'border-blue-500 bg-blue-500/20 scale-[1.02] shadow-[0_0_20px_rgba(59,130,246,0.3)]' : ''
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${task.selected ? 'bg-blue-500 text-white' : (task.type === 'Fixed' ? 'bg-blue-500/20 text-blue-300' : 'bg-white/5 text-white/40')}`}>
+                          {task.type === 'Fixed' ? <Anchor size={18} /> : <Timer size={18} />}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-sm">{task.name}</h4>
+                          </div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-white/30 mt-0.5">
+                            {task.type === 'Fixed' ? `${task.startTime} - ${task.endTime}` : `${task.preference} • ${task.duration}m`}
+                          </p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteTask(task.id);
+                        }}
+                        className="w-10 h-10 flex items-center justify-center text-white/20 hover:text-red-400 transition-colors"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
         )}
 
-        {/* Bento Grid: List */}
-        {tasks.length > 0 && tasks.filter(t => !t.completed && !scheduledTasks.find(st => st.id === t.id)).length > 0 && (
-          <section className="space-y-4 mt-12">
-            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-white/30 px-2">The List</h2>
-            <div className="grid grid-cols-1 gap-3">
-              {tasks.filter(t => !t.completed && !scheduledTasks.find(st => st.id === t.id)).map((task) => (
-                <div 
-                  key={task.id} 
-                  onClick={() => toggleSelect(task.id)}
-                  className={`glass-card p-4 flex items-center justify-between group transition-all active:scale-[0.98] cursor-pointer ${
-                    task.selected ? 'border-blue-500 bg-blue-500/20 scale-[1.02] shadow-[0_0_20px_rgba(59,130,246,0.3)]' : ''
-                  }`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${task.selected ? 'bg-blue-500 text-white' : (task.type === 'Fixed' ? 'bg-blue-500/20 text-blue-300' : 'bg-white/5 text-white/40')}`}>
-                      {task.type === 'Fixed' ? <Anchor size={18} /> : <Timer size={18} />}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-sm">{task.name}</h4>
-                      </div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-white/30 mt-0.5">
-                        {task.type === 'Fixed' ? `${task.startTime} - ${task.endTime}` : `${task.preference} • ${task.duration}m`}
-                      </p>
-                    </div>
-                  </div>
+        {/* Blueprint View */}
+        {activeTab === 'blueprint' && (
+          <div className="space-y-6">
+            {scheduledTasks.length === 0 ? (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="glass-card p-12 flex flex-col items-center text-center space-y-6"
+              >
+                <div className="w-20 h-20 bg-white/5 rounded-[32px] flex items-center justify-center text-white/20">
+                  <Zap size={48} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold mb-2">No plan yet</h2>
+                  <p className="text-white/50 text-sm leading-relaxed">
+                    Select tasks from your list and hit "Plan Day" to generate your schedule.
+                  </p>
+                </div>
+              </motion.div>
+            ) : (
+              <section className="space-y-4">
+                <div className="flex items-center justify-between px-2">
+                  <h2 className="text-xs font-black uppercase tracking-[0.2em] text-blue-300">The Blueprint</h2>
                   <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteTask(task.id);
+                    onClick={() => {
+                      setScheduledTasks([]);
+                      setTasks(tasks.map(t => ({ ...t, selected: false })));
                     }}
-                    className="w-10 h-10 flex items-center justify-center text-white/20 hover:text-red-400 transition-colors"
+                    className="text-[10px] font-bold uppercase tracking-widest text-white/40 hover:text-white transition-colors"
                   >
-                    <X size={18} />
+                    Reset Plan
                   </button>
                 </div>
-              ))}
-            </div>
-          </section>
+                
+                <div className="grid gap-4">
+                  {scheduledTasks.map((task, idx) => (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.1 }}
+                      key={task.id}
+                      onClick={() => toggleComplete(task.id)}
+                      className={`glass-card p-5 relative overflow-hidden group cursor-pointer transition-all active:scale-[0.98] ${
+                        task.completed ? 'opacity-40 grayscale' : ''
+                      } ${task.type === 'Fixed' ? 'border-blue-400/40 bg-blue-500/5' : ''}`}
+                    >
+                      {/* Type Indicator */}
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex items-center gap-2">
+                          {task.type === 'Fixed' ? (
+                            <div className="bg-blue-500/20 text-blue-300 p-1.5 rounded-lg">
+                              <Anchor size={14} />
+                            </div>
+                          ) : (
+                            <div className="bg-white/10 text-white/60 p-1.5 rounded-lg">
+                              <Timer size={14} />
+                            </div>
+                          )}
+                          <span className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                            {task.type}
+                          </span>
+                        </div>
+                        {task.completed && <CheckCircle2 size={18} className="text-emerald-400" />}
+                      </div>
+
+                      <h3 className={`text-lg font-bold leading-tight mb-2 ${task.completed ? 'line-through' : ''}`}>
+                        {task.name}
+                      </h3>
+
+                      <div className="flex items-center gap-4 text-xs font-bold text-white/60">
+                        <div className="flex items-center gap-1.5">
+                          <Clock size={14} className="text-blue-400" />
+                          <span>{task.displayStartTime} — {task.displayEndTime}</span>
+                        </div>
+                        {task.duration && (
+                          <span className="bg-white/5 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-tighter">
+                            {task.duration}m
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Highlight for Fixed */}
+                      {task.type === 'Fixed' && (
+                        <div className="absolute top-0 right-0 w-1 h-full bg-blue-400/50" />
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
         )}
       </main>
 
