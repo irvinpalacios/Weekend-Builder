@@ -117,7 +117,7 @@ export default function App() {
       startTime: taskType === 'Fixed' ? fixedStart : undefined,
       endTime: taskType === 'Fixed' ? calculatedEndTime : undefined,
       completed: false,
-      selected: false,
+      selected: taskType === 'Fixed',
     };
 
     setTasks([...tasks, task]);
@@ -144,7 +144,7 @@ export default function App() {
   };
 
   const toggleSelect = (id: string) => {
-    setTasks(tasks.map(t => t.id === id ? { ...t, selected: !t.selected } : t));
+    setTasks(tasks.map(t => (t.id === id && t.type === 'Flexible') ? { ...t, selected: !t.selected } : t));
   };
 
   const planDay = () => {
@@ -155,7 +155,7 @@ export default function App() {
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
       const startOfPlan = Math.max(currentMinutes + 10, 6 * 60); // Start 10 mins from now or 6 AM
 
-      const pendingTasks = tasks.filter(t => t.selected && !t.completed);
+      const pendingTasks = tasks.filter(t => !t.completed && (t.type === 'Fixed' || t.selected));
       
       // 1. Separate Fixed and Flexible
       const fixedEvents = pendingTasks
@@ -287,7 +287,7 @@ export default function App() {
 
         {/* Bento Grid: Scheduled Timeline */}
         {scheduledTasks.length > 0 && (
-          <section className="space-y-4">
+          <section className="space-y-4 mt-12">
             <div className="flex items-center justify-between px-2">
               <h2 className="text-xs font-black uppercase tracking-[0.2em] text-blue-300">The Blueprint</h2>
               <button 
@@ -358,12 +358,12 @@ export default function App() {
           </section>
         )}
 
-        {/* Bento Grid: Backlog */}
-        {tasks.length > 0 && tasks.filter(t => !scheduledTasks.find(st => st.id === t.id)).length > 0 && (
-          <section className="space-y-4">
-            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-white/30 px-2">The Backlog</h2>
+        {/* Bento Grid: List */}
+        {tasks.length > 0 && tasks.filter(t => !t.completed && !scheduledTasks.find(st => st.id === t.id)).length > 0 && (
+          <section className="space-y-4 mt-12">
+            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-white/30 px-2">The List</h2>
             <div className="grid grid-cols-1 gap-3">
-              {tasks.filter(t => !scheduledTasks.find(st => st.id === t.id)).map((task) => (
+              {tasks.filter(t => !t.completed && !scheduledTasks.find(st => st.id === t.id)).map((task) => (
                 <div 
                   key={task.id} 
                   onClick={() => toggleSelect(task.id)}
@@ -373,16 +373,11 @@ export default function App() {
                 >
                   <div className="flex items-center gap-4">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${task.selected ? 'bg-blue-500 text-white' : (task.type === 'Fixed' ? 'bg-blue-500/20 text-blue-300' : 'bg-white/5 text-white/40')}`}>
-                      {task.selected ? <CheckCircle2 size={20} className="animate-in zoom-in duration-300" /> : (task.type === 'Fixed' ? <Anchor size={18} /> : <Timer size={18} />)}
+                      {task.type === 'Fixed' ? <Anchor size={18} /> : <Timer size={18} />}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <h4 className="font-bold text-sm">{task.name}</h4>
-                        {task.selected && (
-                          <span className="text-[8px] font-black uppercase tracking-widest bg-blue-500 text-white px-1.5 py-0.5 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]">
-                            Selected
-                          </span>
-                        )}
                       </div>
                       <p className="text-[10px] font-black uppercase tracking-widest text-white/30 mt-0.5">
                         {task.type === 'Fixed' ? `${task.startTime} - ${task.endTime}` : `${task.preference} • ${task.duration}m`}
@@ -416,7 +411,7 @@ export default function App() {
         </button>
         <button 
           onClick={planDay}
-          disabled={tasks.filter(t => t.selected && !t.completed).length === 0 || isPlanning}
+          disabled={tasks.filter(t => !t.completed && (t.type === 'Fixed' || t.selected)).length === 0 || isPlanning}
           className="flex-[1.5] h-[56px] bg-blue-600 rounded-2xl font-black uppercase tracking-widest text-white shadow-2xl shadow-blue-500/20 active:scale-95 transition-all disabled:opacity-30 flex items-center justify-center gap-2"
         >
           {isPlanning ? (
@@ -424,7 +419,7 @@ export default function App() {
           ) : (
             <>
               <Zap size={20} />
-              Plan {tasks.filter(t => t.selected && !t.completed).length} Tasks
+              Plan {tasks.filter(t => !t.completed && (t.type === 'Fixed' || t.selected)).length} Tasks
             </>
           )}
         </button>
@@ -517,7 +512,7 @@ export default function App() {
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-[1.2fr_0.8fr] gap-4">
                     <div>
                       <label className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30 mb-3 block">Start Time</label>
                       <input 
